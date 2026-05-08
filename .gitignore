@@ -1,0 +1,15 @@
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.idea/
+.vscode/
+*.iml
+*.swp
+
+# Per-machine harness settings
+.claude/settings.local.json
+
+# Subagent worktrees
+.claude/worktrees/
