@@ -118,3 +118,27 @@ likely be possible if the tickets are very disjoint, but conflicts compound: 4 s
 
 The hidden cap is **how many distinct mental models you can hold**. Reviewing 3 sibling
 agents' reports + resolving 6-9 conflicts is already heavy. 4+ is exhausting.
+
+## When worktree isolation is unavailable
+
+Some Claude Code session configurations report "not in a git repository" and refuse to
+create worktrees, even though `.git/` is present in the working directory (the harness's
+git detection runs at session start and isn't reactive to later state). When this happens
+the Agent tool's `isolation: "worktree"` flag fails outright.
+
+**Fallback pattern**:
+
+1. Parent creates a feature branch off main: `git checkout -b <ticket-id>`.
+2. Spawn the agent without `isolation: "worktree"`. The agent works on the live
+   working tree, on the branch you just created.
+3. Parent verifies, commits, pushes, opens PR, merges.
+4. Repeat for the next sibling.
+
+**Cost of falling back**: agents can no longer run in true parallel — they share the
+working tree. So an N-sibling round becomes serial (N × ticket-length wall-clock) rather
+than parallel (max(ticket-length) wall-clock + merge overhead). For 4-way Wave 2 rounds,
+this is ~3-4× slower in wall-clock terms.
+
+**Mitigation**: split parallel rounds into small batches (2 at a time, in 2 sessions) if
+you have wall-clock budget. Or accept the serial pace and use the time you save not
+context-switching to write tighter ticket specs for the next batch.

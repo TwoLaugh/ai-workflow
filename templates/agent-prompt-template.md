@@ -115,6 +115,12 @@ the source project:
   terminator).
 - `docker-java` 3.3.6 + Docker Desktop 29.x → API mismatch. Pin
   `src/test/resources/docker-java.properties` with `api.version=1.44`.
+- Multiple `@RestControllerAdvice` beans + an `@ExceptionHandler(Exception.class)`
+  catch-all → without explicit `@Order`, the catch-all swallows module-specific
+  exceptions and you ship 500s instead of the intended 4xx mappings. Annotate the
+  catch-all advice with `@Order(Ordered.LOWEST_PRECEDENCE)` and module-specific
+  advices with `@Order(Ordered.HIGHEST_PRECEDENCE)`. Default ordering is unreliable
+  across Spring versions; specify explicitly.
 
 Each gotcha is a 30-min tax avoided. Worth keeping in the prompt.
 
