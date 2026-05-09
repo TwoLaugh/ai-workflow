@@ -121,6 +121,26 @@ the source project:
   catch-all advice with `@Order(Ordered.LOWEST_PRECEDENCE)` and module-specific
   advices with `@Order(Ordered.HIGHEST_PRECEDENCE)`. Default ordering is unreliable
   across Spring versions; specify explicitly.
+- **OpenAPI 3.0 `nullable: true` next to `$ref` is silently ignored** by
+  swagger-parser. Sibling keywords on a `$ref` are dropped — only the ref's
+  target schema matters. For nullable enums, inline `{ type: string, enum: [...],
+  nullable: true }` rather than `{ $ref: '#/MyEnum', nullable: true }`. For
+  nullable nested objects, inline the entire `type: object` + `properties` block
+  with `nullable: true` directly. The `allOf + nullable: true` wrap doesn't help
+  either — the inner allOf schema still rejects null.
+- **Spring `Page<T>` response bodies** include `pageable` and `sort` properties
+  that named page schemas reject unless explicitly `additionalProperties: true`.
+  Add it to every `<X>DtoPage` schema you declare.
+- **`replaceChildren()` then `saveAndFlush` trips `(parent_id, business_key)`
+  unique constraints** when Hibernate flushes inserts before deletes within one
+  flush. Compute the change-set BEFORE mutating the aggregate; only mutate +
+  flush when changedFields is non-empty. The naive pattern works for collections
+  without business-key uniqueness (preference's allergies are list-of-strings)
+  but fails as soon as a child has a natural key.
+- **Don't trust LLD column widths blindly.** Compute from the format. Recipe's
+  LLD spec'd `created_by_actor varchar(32)` but the contract value
+  `'user:<uuid>'` is 41 chars. If a column holds a templated string, size from
+  the longest possible value, not the LLD's number.
 
 Each gotcha is a 30-min tax avoided. Worth keeping in the prompt.
 
