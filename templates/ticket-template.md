@@ -30,6 +30,41 @@ Aim for ≥10 invariants on a non-trivial ticket. Each invariant should be testa
 
 The exact YAML chunks to add. The agent will splice these into `openapi.yaml` literally.
 
+**Spring Page<T> schema shape** — use the flat form, not a nested `page: { number, size }` object. Spring Boot 3.2.5+ serialises `Page<T>` to flat properties; nesting them silently doesn't match. Always include `additionalProperties: true` so swagger-parser tolerates Spring's `pageable` / `sort` extras:
+
+```yaml
+FooDtoPage:
+  type: object
+  additionalProperties: true
+  required: [content, totalElements, totalPages, number, size]
+  properties:
+    content:
+      type: array
+      items: { $ref: '#/FooDto' }
+    totalElements: { type: integer, format: int64 }
+    totalPages: { type: integer }
+    number: { type: integer }
+    size: { type: integer }
+    first: { type: boolean }
+    last: { type: boolean }
+    empty: { type: boolean }
+    numberOfElements: { type: integer }
+```
+
+For nullable scalar/object/enum properties: never use `$ref + nullable: true` (sibling keywords on `$ref` are silently ignored by swagger-parser). Inline the type:
+
+```yaml
+status:
+  type: string
+  enum: [STOCKED, LOW, OUT]
+  nullable: true
+
+freezerExtension:
+  type: object
+  nullable: true
+  properties: { ... inline the whole object schema ... }
+```
+
 ## Edge-case checklist
 
 A bulleted list. Each box maps 1:1 to a test the agent must write.

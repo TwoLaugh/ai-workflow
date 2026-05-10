@@ -141,6 +141,18 @@ the source project:
   LLD spec'd `created_by_actor varchar(32)` but the contract value
   `'user:<uuid>'` is 41 chars. If a column holds a templated string, size from
   the longest possible value, not the LLD's number.
+- **HTTP-client adapters (RestClient / WebClient) must live in `..api..` or
+  `..config..`** — the project's ArchUnit `springWebStaysInApi` rule forbids
+  Spring Web types in `domain.service.internal`. If you need to fetch a URL or
+  call an external service, place the adapter in `<module>/config/` (or
+  `<module>/api/internal/`). Recipe-01b's `UrlFetcher` was caught by this rule
+  in iter 1 and fixed by relocation; bake the convention in upfront.
+- **Boolean DTO fields with a default but no explicit `nullable`**: Jackson
+  serialises an unset `Boolean` (boxed) field to JSON `null`, which the
+  swagger-request-validator rejects against a non-nullable `boolean` schema.
+  Either declare the schema `nullable: true` (matches the `default: false`
+  intent) OR use a primitive `boolean` field on the DTO so unset stays `false`
+  (no null in JSON).
 
 Each gotcha is a 30-min tax avoided. Worth keeping in the prompt.
 
