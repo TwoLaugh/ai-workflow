@@ -119,6 +119,67 @@ likely be possible if the tickets are very disjoint, but conflicts compound: 4 s
 The hidden cap is **how many distinct mental models you can hold**. Reviewing 3 sibling
 agents' reports + resolving 6-9 conflicts is already heavy. 4+ is exhausting.
 
+## Manual-worktree parallel pattern (validated, 3-4× speedup)
+
+If the harness's `isolation: "worktree"` flag fails (typically because the SESSION's primary cwd isn't a git repo even though the project subdirectory IS), you can still get true parallel execution by creating worktrees yourself. This was validated on a 4-module round in the source project: 4 implementation agents ran simultaneously, total wall-clock ~78 min vs the serial equivalent's ~5 hours.
+
+**Setup (parent, before spawning agents):**
+
+```
+# Pre-condition: tickets already committed to main; main is green; agents
+# are about to be spawned for N sibling tickets.
+
+cd <project-root>
+git worktree add ../<project>-wt-moduleA -b feat/moduleA-NN main
+git worktree add ../<project>-wt-moduleB -b feat/moduleB-NN main
+# ... etc, one per parallel ticket
+```
+
+**Agent prompt requirements** (stated explicitly so the agent doesn't drift back to the main checkout):
+
+```
+Your worktree is at: <absolute-path-to-worktree>
+Your branch: feat/<module>-<NN>
+
+You MUST work in <absolute-path>. Use absolute paths in all Read/Edit/Write
+calls. For Bash commands, prefix with `cd "<absolute-path>" ; ...` so mvn
+and git operate on YOUR worktree.
+
+Three sibling agents are running in parallel right now in their own
+worktrees. Do NOT modify any other module's package.
+```
+
+**Spawn all N agents in a single message** with `run_in_background: true`. They run truly in parallel.
+
+**Sequential merge as agents complete (parent):**
+
+```
+1. As each agent's completion notification arrives:
+   a. cd into its worktree
+   b. git add -A && git commit -m "<message>"
+   c. git fetch origin main && git rebase origin/main
+      (picks up any siblings already merged; per-module file scope means
+      conflicts are usually clean appends to entry files like openapi.yaml)
+   d. git push -u origin <branch>
+   e. gh pr create
+   f. gh pr checks <PR> --watch (in background)
+2. As CI on each PR goes green:
+   a. gh pr merge <PR> --squash --delete-branch
+   b. git worktree remove ../<project>-wt-<module>
+   c. git branch -D feat/<module>-<NN>
+3. After all merged: git checkout main && git pull --ff-only
+```
+
+**Skip parent-side local `mvn verify` under parallel.** With N concurrent JVMs + Testcontainers + spotless, Docker daemon and Mockito self-attach (Windows specifically) can produce flakes on tests the agent never touched. CI on isolated GitHub runners is the source of truth. The agent's module-level tests passing in its own report is enough signal to push.
+
+**Caveats observed at N=4 on Windows:**
+- Docker daemon HTTP 500 on Testcontainers startup ~30% of cross-module ITs during the parallel phase
+- Mockito InlineByteBuddyMockMaker self-attach failures on Windows JDK 17.0.2 under multi-fork (51 unrelated tests affected; 0 affected on CI Linux)
+- JVM "VM terminated without saying goodbye" under memory pressure with 4× simultaneous mvn verify
+- Per-agent runtime rose ~2× (61 min vs 23-25 min serial) because each agent burned cycles fighting flakes — but wall-clock still dropped 3-4× overall
+
+**Probably 3 is a better steady-state on Windows; 4 is feasible but flake-noisy.** On Linux, expect closer to theoretical N× speedup.
+
 ## When worktree isolation is unavailable
 
 Some Claude Code session configurations report "not in a git repository" and refuse to

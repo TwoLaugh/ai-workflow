@@ -75,6 +75,17 @@ Project-specific correctness requirements. Examples:
 - Security-critical code: list specific invariants (timing parity, generic error messages, etc.).
 - Architectural rules: ArchUnit will fail if you violate the cross-module-repo-access rule.
 
+## When running in a worktree (parallel pattern)
+
+If your prompt directs you to a worktree path (e.g., `C:\path\to\project-wt-foo`), you are running in PARALLEL with sibling agents in their own worktrees. Conventions:
+
+- Use ABSOLUTE paths in every Read/Edit/Write call. The path you were given IS your project root.
+- Prefix every Bash command with `cd "<your-worktree-absolute-path>" ; ...` so mvn/git operate on YOUR worktree, not the parent checkout.
+- Don't `cd` into a sibling worktree or the main project tree — your worktree is a complete checkout of the same codebase.
+- Don't modify other modules' files — siblings are working there.
+
+**Verify loop in a worktree** can flake on cross-module tests under parallel pressure (Testcontainers Docker overload, Mockito self-attach on Windows, JVM memory). If your NEW tests (`-Dtest=YourNewTest -Dit.test=YourNewIT`) pass in isolation but cross-module tests flake, that's an environment issue — note it in your report and let the parent rely on CI. Don't iterate the local loop more than 2-3 times chasing environmental flakes.
+
 ## Verify loop — run AFTER writing the code
 
 ```
