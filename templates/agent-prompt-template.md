@@ -139,6 +139,13 @@ the source project:
   nullable nested objects, inline the entire `type: object` + `properties` block
   with `nullable: true` directly. The `allOf + nullable: true` wrap doesn't help
   either — the inner allOf schema still rejects null.
+
+  **Even if you've defined the named schema for documentation purposes**, don't
+  reuse it via `$ref` when the parent field is nullable. INLINE the schema in
+  the parent DTO's `properties:` block. The DRY instinct (reuse named schemas)
+  is the wrong instinct here — duplicate the structure. This trap has hit
+  Round 1, Round 4, AND Round 6 of the source project; it's sticky because
+  reusing feels right. Override the instinct.
 - **Spring `Page<T>` response bodies** include `pageable` and `sort` properties
   that named page schemas reject unless explicitly `additionalProperties: true`.
   Add it to every `<X>DtoPage` schema you declare.
@@ -203,6 +210,23 @@ public class NoopMyServiceConfiguration {     // class name → bean "noopMyServ
 - A `@Bean` method named the same (case-insensitively) as the enclosing `@Configuration` class — both register a bean with the same auto-generated name → `BeanDefinitionOverrideException` at startup, ALL ITs fail to load context.
 
 **Test-side bean override**: when a test wants to provide its own implementation via `@TestConfiguration`, add `@Primary` to the test bean. Spring's `@ConditionalOnMissingBean` doesn't always defer to `@TestConfiguration` imports because the imports may register after the conditional has already evaluated.
+
+## `@MockBean` on a multi-interface `@Service` class
+
+If the real `@Service` class implements MULTIPLE interfaces (common for facade-style services — e.g., `RecipeServiceImpl implements RecipeQueryService, RecipeUpdateService, RecipeSubstitutionRecorder`), `@MockBean private SomeInterface foo` removes the entire real bean AND substitutes a mock that satisfies ONLY that one interface. Spring then fails to wire any other interface the real class provided → `NoSuchBeanDefinitionException` at context load, EVERY test in the IT errors out with "expected at least 1 bean".
+
+Fix: `@MockBean` every interface the real class implements, even if you only stub behavior on one:
+
+```java
+// Real class: @Service class RecipeServiceImpl implements
+//   RecipeQueryService, RecipeUpdateService, RecipeSubstitutionRecorder { ... }
+
+@MockBean private RecipeQueryService recipeQueryService;       // you wanted to stub this
+@MockBean private RecipeUpdateService recipeUpdateService;     // collateral — needs a stub too
+@MockBean private RecipeSubstitutionRecorder recipeSubRecorder; // same
+```
+
+Quick check before adding `@MockBean`: `grep "implements" src/main/java/.../<TargetClass>.java` to see all interfaces it provides.
 
 ## `@Transactional` + intentional 4xx-throwing service methods
 

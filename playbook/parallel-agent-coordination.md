@@ -174,6 +174,8 @@ worktrees. Do NOT modify any other module's package.
 
 **The worktree itself is the source of truth, not the agent's text reply.** If the parent session pauses and an agent reply message times out (the user comes back hours later, no notification reaches them), the worktree still has the code on disk. Just inspect `git status` in each worktree, push as-is, and let CI judge. This recovered round 4 cleanly when 3 of 4 agent reports were lost to a long session gap.
 
+**Rate limits are also recoverable.** If you hit the daily-usage cap mid-round (agents return within seconds with "You've hit your limit · resets HH:MMpm"), the worktrees are typically untouched (agents abort before any tool calls). After the reset, re-spawn the same 4 agents with the same prompts on the same worktrees. Validated in round 6: zero code lost, agents picked up cleanly after the reset.
+
 **Caveats observed at N=4 on Windows:**
 - Docker daemon HTTP 500 on Testcontainers startup ~30% of cross-module ITs during the parallel phase
 - Mockito InlineByteBuddyMockMaker self-attach failures on Windows JDK 17.0.2 under multi-fork (51 unrelated tests affected; 0 affected on CI Linux)
