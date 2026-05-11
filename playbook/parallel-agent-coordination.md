@@ -172,6 +172,8 @@ worktrees. Do NOT modify any other module's package.
 
 **Skip parent-side local `mvn verify` under parallel.** With N concurrent JVMs + Testcontainers + spotless, Docker daemon and Mockito self-attach (Windows specifically) can produce flakes on tests the agent never touched. CI on isolated GitHub runners is the source of truth. The agent's module-level tests passing in its own report is enough signal to push.
 
+**The worktree itself is the source of truth, not the agent's text reply.** If the parent session pauses and an agent reply message times out (the user comes back hours later, no notification reaches them), the worktree still has the code on disk. Just inspect `git status` in each worktree, push as-is, and let CI judge. This recovered round 4 cleanly when 3 of 4 agent reports were lost to a long session gap.
+
 **Caveats observed at N=4 on Windows:**
 - Docker daemon HTTP 500 on Testcontainers startup ~30% of cross-module ITs during the parallel phase
 - Mockito InlineByteBuddyMockMaker self-attach failures on Windows JDK 17.0.2 under multi-fork (51 unrelated tests affected; 0 affected on CI Linux)

@@ -164,6 +164,29 @@ the source project:
   Either declare the schema `nullable: true` (matches the `default: false`
   intent) OR use a primitive `boolean` field on the DTO so unset stays `false`
   (no null in JSON).
+- **YAML inline-flow `{ ... }` strings with internal commas/colons/quotes**:
+  in flow style, commas separate map entries — so `description: foo, bar baz`
+  inside `{ ... }` is parsed as TWO entries (`description: foo` then
+  `bar baz:`). swagger-cli rejects the malformed Response Object as
+  "must NOT have additional properties / must have required property '$ref'".
+  Always single-quote OpenAPI description strings if they contain commas,
+  colons, or quotes — or use multi-line block style for descriptions >3 words.
+- **MockMvc `put("...%XX...")` double-encodes URL paths**: MockMvc treats the
+  string as a URL template and re-encodes the `%` character, producing
+  `%25XX`. Spring's `StrictHttpFirewall` blocks URLs containing `%25` in
+  path segments → 400 with no handler matched (Handler = null in mock logs).
+  Workaround: for IT tests, use path-variable values that don't require URL
+  encoding (`chicken-breast` not `chicken breast`). Move encoding-sensitive
+  coverage to unit tests on the normaliser/decoder, not HTTP layer.
+
+## Don't skip `spotless:apply`
+
+The verify-loop section below says "run `./mvnw spotless:apply` then
+`./mvnw spotless:check` on green". This is NOT optional. CI's spotless check
+will fail your PR if format violations remain, costing a round-trip
+(~6 min CI + parent push). **Run both, every time.** If your final report
+says "verify green", the spotless commands MUST have been run; otherwise
+the report is misleading.
 
 Each gotcha is a 30-min tax avoided. Worth keeping in the prompt.
 
