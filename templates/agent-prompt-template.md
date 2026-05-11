@@ -179,6 +179,37 @@ the source project:
   encoding (`chicken-breast` not `chicken breast`). Move encoding-sensitive
   coverage to unit tests on the normaliser/decoder, not HTTP layer.
 
+## SPI-with-Noop pattern gotcha cluster
+
+If the ticket asks you to define a Service-Provider-Interface (SPI) with a Noop / default fallback that another module will override later, you'll hit a chain of four bugs unless you follow this exact recipe:
+
+```java
+// CORRECT: @Bean factory in a @Configuration class with a DISTINCT method name
+@Configuration
+public class NoopMyServiceConfiguration {     // class name → bean "noopMyServiceConfiguration"
+
+  @Bean
+  @ConditionalOnMissingBean(MyService.class)
+  MyService defaultMyService() {              // method name → bean "defaultMyService" (DIFFERENT)
+    return new NoopMyServiceImpl();
+  }
+
+  static class NoopMyServiceImpl implements MyService { ... }
+}
+```
+
+**Do NOT use**:
+- `@Component @ConditionalOnMissingBean` on the class itself — the conditional fires during component-scan, before other beans (test configs, sibling-module configs) register. The Noop registers unconditionally, then a real impl appears later → `NoUniqueBeanDefinitionException`.
+- A `@Bean` method named the same (case-insensitively) as the enclosing `@Configuration` class — both register a bean with the same auto-generated name → `BeanDefinitionOverrideException` at startup, ALL ITs fail to load context.
+
+**Test-side bean override**: when a test wants to provide its own implementation via `@TestConfiguration`, add `@Primary` to the test bean. Spring's `@ConditionalOnMissingBean` doesn't always defer to `@TestConfiguration` imports because the imports may register after the conditional has already evaluated.
+
+## `@Transactional` + intentional 4xx-throwing service methods
+
+If a service writes audit/state/verdict rows then throws an exception that maps to a 4xx (e.g., `BlockedByValidationException` mapped to 422), the default `@Transactional` behavior rolls back EVERYTHING — including the audit rows you just wrote. The response is correct, but the user can't review the verdict because the row doesn't exist.
+
+Fix: `@Transactional(noRollbackFor = YourException.class)` on the service method. Intermediate writes commit; the exception still surfaces. Test by reading back via JdbcTemplate after the 4xx response.
+
 ## Don't skip `spotless:apply`
 
 The verify-loop section below says "run `./mvnw spotless:apply` then
