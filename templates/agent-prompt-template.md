@@ -211,6 +211,27 @@ public class NoopMyServiceConfiguration {     // class name → bean "noopMyServ
 
 **Test-side bean override**: when a test wants to provide its own implementation via `@TestConfiguration`, add `@Primary` to the test bean. Spring's `@ConditionalOnMissingBean` doesn't always defer to `@TestConfiguration` imports because the imports may register after the conditional has already evaluated.
 
+## `@TransactionalEventListener` + `@Transactional` propagation
+
+If you put `@Transactional` on a `@TransactionalEventListener` method, Spring REQUIRES the propagation to be either `REQUIRES_NEW` or `NOT_SUPPORTED`. The default (`REQUIRED`) and `SUPPORTS` are rejected at context-load with a fail-fast error that blocks EVERY IT across the project — not just the one with the listener.
+
+```
+@TransactionalEventListener method must not be annotated with @Transactional
+unless when declared as REQUIRES_NEW or NOT_SUPPORTED
+```
+
+For an `AFTER_COMMIT` listener that needs to do JPA work (read entities, write back via an SPI, etc.), the publisher's tx has committed and closed by the time the listener runs — so the listener body has no active tx. JPA operations inside it throw `TransactionRequiredException`. Even if the listener eventually calls a `@Transactional` service method (which opens its own tx), the calls BEFORE that point are still outside a tx and fail.
+
+Recipe:
+
+```java
+@TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+@Transactional(propagation = Propagation.REQUIRES_NEW)
+public void onSomeEvent(SomeEvent event) {
+  // JPA reads + writes here run in a fresh tx
+}
+```
+
 ## `@MockBean` on a multi-interface `@Service` class
 
 If the real `@Service` class implements MULTIPLE interfaces (common for facade-style services — e.g., `RecipeServiceImpl implements RecipeQueryService, RecipeUpdateService, RecipeSubstitutionRecorder`), `@MockBean private SomeInterface foo` removes the entire real bean AND substitutes a mock that satisfies ONLY that one interface. Spring then fails to wire any other interface the real class provided → `NoSuchBeanDefinitionException` at context load, EVERY test in the IT errors out with "expected at least 1 bean".
